@@ -5,6 +5,12 @@ st.title("🤖 나의 AI 챗봇")
 
 # 사이드바에서 API Key 입력
 api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+st.sidebar.markdown("---")
+st.sidebar.subheader("오늘의 기분")
+mood_options = ["😀 기분 좋아요", "🙂 괜찮아요", "😐 보통이에요", "🙁 우울해요", "😣 스트레스 받아요"]
+selected_mood = st.sidebar.selectbox("현재 기분을 선택해주세요", mood_options)
+
+st.caption(f"현재 기분: {selected_mood}")
 
 # 대화 기록 초기화
 if "messages" not in st.session_state:
