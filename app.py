@@ -2,7 +2,7 @@ import os
 import json
 import re
 import difflib
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 import streamlit as st
 
 # -----------------------------
@@ -81,42 +81,41 @@ def derive_change_points(original, rewritten):
     if not original.strip() or not rewritten.strip():
         return points
 
-    length_delta = len(rewritten) - len(original)
-    if abs(length_delta) >= 50:
-        direction = "확장" if length_delta > 0 else "축약"
-        points.append(f"분량이 약 {abs(length_delta)}자 {direction}되었습니다.")
+    delta = len(rewritten) - len(original)
+    if abs(delta) > 50:
+        points.append(f"분량이 약 {abs(delta)}자 {'확장' if delta > 0 else '축약'}되었습니다.")
 
-    original_lines = [line.strip() for line in original.splitlines() if line.strip()]
-    rewritten_lines = [line.strip() for line in rewritten.splitlines() if line.strip()]
-    if len(rewritten_lines) != len(original_lines):
-        points.append("문장 구성이 재배열되어 흐름이 다듬어졌습니다.")
+    if len(original.splitlines()) != len(rewritten.splitlines()):
+        points.append("문장 구조가 재배열되어 흐름이 개선되었습니다.")
 
     if not points:
-        points.append("핵심 표현을 유지하면서 문장을 매끄럽게 다듬었습니다.")
+        points.append("핵심 의미를 유지하며 표현을 정제했습니다.")
+
     return points
 
 def derive_repurpose_suggestions(major, minor):
     suggestions = []
-    for item in MAJOR_PURPOSES.get(major, []):
-        if item != minor:
-            suggestions.append({"major_purpose": major, "minor_purpose": item})
-    if len(suggestions) < 2:
+    for m in MAJOR_PURPOSES.get(major, []):
+        if m != minor:
+            suggestions.append({"major_purpose": major, "minor_purpose": m})
+
+    if len(suggestions) < 3:
         for other_major, minors in MAJOR_PURPOSES.items():
-            if other_major == major:
-                continue
-            suggestions.append({"major_purpose": other_major, "minor_purpose": minors[0]})
+            if other_major != major:
+                suggestions.append({"major_purpose": other_major, "minor_purpose": minors[0]})
             if len(suggestions) >= 3:
                 break
+
     return suggestions
 
 # -----------------------------
-# AI Call (OpenAI v1+)
+# OpenAI Call
 # -----------------------------
 def call_openai(api_key, model, system_prompt, user_prompt, temperature):
     from openai import OpenAI
     client = OpenAI(api_key=api_key)
 
-    resp = client.responses.create(
+    res = client.responses.create(
         model=model,
         temperature=temperature,
         input=[
@@ -124,34 +123,29 @@ def call_openai(api_key, model, system_prompt, user_prompt, temperature):
             {"role": "user", "content": user_prompt},
         ]
     )
-    return resp.output_text
+    return res.output_text
 
 def safe_json(text):
     try:
         return json.loads(text)
     except:
-        m = re.search(r"\{.*\}", text, re.S)
-        return json.loads(m.group()) if m else {}
+        match = re.search(r"\{.*\}", text, re.S)
+        return json.loads(match.group()) if match else {}
 
 # -----------------------------
 # Prompt Builder
 # -----------------------------
 def build_prompt(p):
-    template = STRUCTURE_TEMPLATES.get(p["minor"], "논리적 구조로 구성")
+    template = STRUCTURE_TEMPLATES.get(p["minor"], "논리적 구조")
 
     system = (
-        "너는 편집자다. 사실을 유지하며 목적에 맞게 글을 재구성하라. "
-        "문체와 관용구를 목적에 맞게 재작성하고, 목적과 어울리지 않는 표현은 제거하라. "
-        "출력은 JSON만 반환하라."
+        "너는 전문 편집자다. 사실은 유지하고 목적에 맞는 언어 영역으로 변환한다. "
+        "출력은 반드시 JSON 형식으로 반환한다."
     )
 
-    expansion_instruction = ""
-    if p.get("expand"):
-        expansion_instruction = (
-            "\n- expanded_text에는 원문 사실을 해치지 않되 목적에 맞게 "
-            "의미를 보강한 문장을 추가로 포함하라. "
-            "예시처럼 '경험 → 목적/제안'의 논리를 자연스럽게 연결한다."
-        )
+    expand = ""
+    if p["expand"]:
+        expand = "\nexpanded_text에는 목적에 맞게 논리를 보강한 문장을 추가한다."
 
     user = f"""
 원본:
@@ -162,39 +156,37 @@ def build_prompt(p):
 편집 강도: {EDIT_INTENSITY[p["edit"]]}
 톤: {p["tone"]}, 스타일: {p["style"]}, 독자: {p["audience"]}
 분량: {p["length"]}자
-목적 필터링:
-- 목적에 맞지 않는 관용구/도메인 표현은 제거 또는 치환하라.
-- 예: 비즈니스 제안서에는 '본 연구는' 같은 학술 표현을 사용하지 않는다.
-{expansion_instruction}
+
+목적에 맞지 않는 표현은 목적 언어로 치환하라.
+
+{expand}
 
 JSON:
 {{
  "rewritten_text": "",
  "expanded_text": "",
  "change_points": [],
- "detected_original_traits": [],
  "suggested_repurposes": []
 }}
 """
     return system, user
 
 # -----------------------------
-# UI Sidebar
+# Sidebar
 # -----------------------------
 with st.sidebar:
     st.header("⚙️ 설정")
     api_key = st.text_input("API Key", type="password")
     model = st.selectbox("모델", ["gpt-4o-mini", "gpt-4.1-mini"])
-    persona = st.selectbox("특성", PERSONA_OPTIONS)
     major = st.selectbox("대목적", MAJOR_PURPOSES.keys())
     minor = st.selectbox("소목적", MAJOR_PURPOSES[major])
     tone = st.selectbox("톤", TONE)
     style = st.selectbox("스타일", STYLE)
     audience = st.selectbox("독자", AUDIENCE)
-    length_key = st.select_slider("분량", LENGTH_PRESET.keys())
-    edit_level = st.select_slider("편집 강도", EDIT_INTENSITY.keys())
+    length_key = st.select_slider("분량", list(LENGTH_PRESET.keys()))
+    edit_level = st.select_slider("편집 강도", list(EDIT_INTENSITY.keys()))
     temperature = st.slider("창의성", 0.0, 1.0, 0.5)
-    expand_text = st.checkbox("내용 확장(목적에 맞게 살을 붙임)", value=True)
+    expand_text = st.checkbox("내용 확장", True)
 
 # -----------------------------
 # Main
@@ -204,7 +196,8 @@ st.title("🛠️ RePurpose")
 original_text = st.text_area("원본 텍스트", height=280)
 run = st.button("변환")
 
-if run:
+if run and original_text.strip():
+
     payload = {
         "text": original_text,
         "major": major,
@@ -222,39 +215,33 @@ if run:
     with st.spinner("변환 중..."):
         raw = call_openai(api_key, model, system, user, temperature)
 
-    data = safe_json(raw) or {}
+    data = safe_json(raw)
+
     rewritten = data.get("rewritten_text", "")
     expanded = data.get("expanded_text", "")
 
-    st.subheader("✅ 변환 결과 (하이라이트)")
+    st.subheader("✅ 변환 결과")
     st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
-    st.caption("🟩 추가된 문장 · 🟨 수정된 문장 · 취소선은 삭제된 표현")
 
     if expand_text and expanded:
-        st.subheader("✨ 확장 결과 (목적 중심 보강)")
+        st.subheader("✨ 확장 결과")
         st.write(expanded)
 
     st.subheader("🔍 변경 포인트")
-    change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
-    for c in change_points:
-        st.write("-", c)
+    for p in data.get("change_points", []) or derive_change_points(original_text, rewritten):
+        st.write("-", p)
 
     st.subheader("💡 재활용 추천")
-    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
-    for r in suggested:
-        if isinstance(r, dict):
-            major_purpose = r.get("major_purpose", "기타")
-            minor_purpose = r.get("minor_purpose", "추천")
-            st.write(f"{major_purpose} → {minor_purpose}")
-        else:
-            st.write(str(r))
 
-    # AI Score (simple heuristic)
+    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
+
+    for r in suggested:
+        st.write(f"{r['major_purpose']} → {r['minor_purpose']}")
+
     st.subheader("📈 품질 점수")
     score = min(95, 60 + len(rewritten)//200)
     st.progress(score/100)
     st.write(f"{score}/100")
 
-    # Downloads
     st.download_button("TXT 다운로드", rewritten, file_name="result.txt")
     st.download_button("MD 다운로드", rewritten, file_name="result.md")
