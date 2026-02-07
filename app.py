@@ -1,10 +1,4 @@
-diff --git a/app.py b/app.py
-index b2d633619b663357e3ce907384856c297493e0eb..7083ed51fc79a6ebecaec620354cddd58587fd2d 100644
---- a/app.py
-+++ b/app.py
-@@ -51,145 +51,205 @@ STRUCTURE_TEMPLATES = {
- }
- 
+
  # -----------------------------
  # Diff Helpers
  # -----------------------------
