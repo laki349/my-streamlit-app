@@ -249,9 +249,9 @@ if run:
         st.write("-", c)
 
     st.subheader("💡 재활용 추천")
+
     suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
-    for r in suggested:
-    suggested = data.get("suggested_repurposes", [])
+
     if suggested:
         for r in suggested:
             if isinstance(r, dict):
@@ -260,15 +260,9 @@ if run:
                 st.write(f"{major_purpose} → {minor_purpose}")
             else:
                 st.write(r)
-    else:
-        st.caption("추천 항목이 없습니다.")
-    for r in data.get("suggested_repurposes", []):
-        if isinstance(r, dict):
-            major_purpose = r.get("major_purpose", "기타")
-            minor_purpose = r.get("minor_purpose", "기타")
-            st.write(f"{major_purpose} → {minor_purpose}")
-        else:
-            st.write(r)
+            else:
+                st.caption("추천 항목이 없습니다.")
+
 
     # AI Score (simple heuristic)
     st.subheader("📈 품질 점수")
