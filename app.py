@@ -237,6 +237,7 @@ if run:
     st.subheader("💡 재활용 추천")
     suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
     for r in suggested:
+    for r in data.get("suggested_repurposes", []):
         if isinstance(r, dict):
             major_purpose = r.get("major_purpose", "기타")
             minor_purpose = r.get("minor_purpose", "추천")
