@@ -108,6 +108,14 @@ def build_prompt(p):
         "출력은 JSON만 반환하라."
     )
 
+    expansion_instruction = ""
+    if p.get("expand"):
+        expansion_instruction = (
+            "\n- expanded_text에는 원문 사실을 해치지 않되 목적에 맞게 "
+            "의미를 보강한 문장을 추가로 포함하라. "
+            "예시처럼 '경험 → 목적/제안'의 논리를 자연스럽게 연결한다."
+        )
+
     user = f"""
 원본:
 {p["text"]}
@@ -117,10 +125,12 @@ def build_prompt(p):
 편집 강도: {EDIT_INTENSITY[p["edit"]]}
 톤: {p["tone"]}, 스타일: {p["style"]}, 독자: {p["audience"]}
 분량: {p["length"]}자
+{expansion_instruction}
 
 JSON:
 {{
  "rewritten_text": "",
+ "expanded_text": "",
  "change_points": [],
  "detected_original_traits": [],
  "suggested_repurposes": []
@@ -144,6 +154,7 @@ with st.sidebar:
     length_key = st.select_slider("분량", LENGTH_PRESET.keys())
     edit_level = st.select_slider("편집 강도", EDIT_INTENSITY.keys())
     temperature = st.slider("창의성", 0.0, 1.0, 0.5)
+    expand_text = st.checkbox("내용 확장(목적에 맞게 살을 붙임)", value=True)
 
 # -----------------------------
 # Main
@@ -162,7 +173,8 @@ if run:
         "style": style,
         "audience": audience,
         "length": LENGTH_PRESET[length_key],
-        "edit": edit_level
+        "edit": edit_level,
+        "expand": expand_text
     }
 
     system, user = build_prompt(payload)
@@ -172,9 +184,14 @@ if run:
 
     data = safe_json(raw)
     rewritten = data.get("rewritten_text", "")
+    expanded = data.get("expanded_text", "")
 
     st.subheader("✅ 변환 결과 (하이라이트)")
     st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+
+    if expand_text and expanded:
+        st.subheader("✨ 확장 결과 (목적 중심 보강)")
+        st.write(expanded)
 
     st.subheader("🔍 변경 포인트")
     for c in data.get("change_points", []):
@@ -182,7 +199,12 @@ if run:
 
     st.subheader("💡 재활용 추천")
     for r in data.get("suggested_repurposes", []):
-        st.write(f"{r['major_purpose']} → {r['minor_purpose']}")
+        if isinstance(r, dict):
+            major_purpose = r.get("major_purpose", "기타")
+            minor_purpose = r.get("minor_purpose", "추천")
+            st.write(f"{major_purpose} → {minor_purpose}")
+        else:
+            st.write(f"{r}")
 
     # AI Score (simple heuristic)
     st.subheader("📈 품질 점수")
