@@ -74,6 +74,42 @@ def render_diff_html(original, revised):
     return f"<div style='line-height:1.8'>{' '.join(out)}</div>"
 
 # -----------------------------
+# Insight Helpers
+# -----------------------------
+def derive_change_points(original, rewritten):
+    points = []
+    if not original.strip() or not rewritten.strip():
+        return points
+
+    length_delta = len(rewritten) - len(original)
+    if abs(length_delta) >= 50:
+        direction = "확장" if length_delta > 0 else "축약"
+        points.append(f"분량이 약 {abs(length_delta)}자 {direction}되었습니다.")
+
+    original_lines = [line.strip() for line in original.splitlines() if line.strip()]
+    rewritten_lines = [line.strip() for line in rewritten.splitlines() if line.strip()]
+    if len(rewritten_lines) != len(original_lines):
+        points.append("문장 구성이 재배열되어 흐름이 다듬어졌습니다.")
+
+    if not points:
+        points.append("핵심 표현을 유지하면서 문장을 매끄럽게 다듬었습니다.")
+    return points
+
+def derive_repurpose_suggestions(major, minor):
+    suggestions = []
+    for item in MAJOR_PURPOSES.get(major, []):
+        if item != minor:
+            suggestions.append({"major_purpose": major, "minor_purpose": item})
+    if len(suggestions) < 2:
+        for other_major, minors in MAJOR_PURPOSES.items():
+            if other_major == major:
+                continue
+            suggestions.append({"major_purpose": other_major, "minor_purpose": minors[0]})
+            if len(suggestions) >= 3:
+                break
+    return suggestions
+
+# -----------------------------
 # AI Call (OpenAI v1+)
 # -----------------------------
 def call_openai(api_key, model, system_prompt, user_prompt, temperature):
@@ -208,10 +244,13 @@ if run:
             st.caption("표시할 이유가 없습니다.")
 
     st.subheader("🔍 변경 포인트")
-    for c in data.get("change_points", []):
+    change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
+    for c in change_points:
         st.write("-", c)
 
     st.subheader("💡 재활용 추천")
+    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
+    for r in suggested:
     suggested = data.get("suggested_repurposes", [])
     if suggested:
         for r in suggested:
