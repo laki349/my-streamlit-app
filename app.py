@@ -65,11 +65,11 @@ def render_diff_html(original, revised):
         if tag == "equal":
             out.append(" ".join(b[j1:j2]))
         elif tag == "insert":
-            out.append(f"<span style='background:#C8FACC'>{' '.join(b[j1:j2])}</span>")
-        elif tag == "replace":
             out.append(f"<span style='background:#FFF3A3'>{' '.join(b[j1:j2])}</span>")
+        elif tag == "replace":
+            out.append(f"<span style='background:#C8FACC'>{' '.join(b[j1:j2])}</span>")
         elif tag == "delete":
-            out.append(f"<span style='color:#E74C3C;text-decoration:line-through'>{' '.join(a[i1:i2])}</span>")
+            out.append(f"<span style='background:#FDE2E2;color:#B91C1C;text-decoration:line-through'>{' '.join(a[i1:i2])}</span>")
 
     return f"<div style='line-height:1.8'>{' '.join(out)}</div>"
 
@@ -110,7 +110,22 @@ def build_prompt(p):
         "부적절한 관용구, 도메인 표현, 톤은 제거하지 말고 반드시 목적에 맞게 치환하라. "
         "문체의 다양성과 리듬은 유지하고 문장을 획일화하지 마라. "
         "추론 설명 없이 결과만 JSON으로 반환하라. "
-        "원문에 없는 정보라도 목적에 어울리는 홍보/설명/맥락 요소를 자의적으로 추가할 수 있다."
+        "원문에 없는 정보라도 목적에 어울리는 홍보/설명/맥락 요소를 자의적으로 추가할 수 있다. "
+        "각 목적에는 고유한 언어 영역(register)이 존재한다. "
+        "원본 표현을 삭제하지 말고, 목적에 맞는 표현으로 변환(치환)하라. "
+        "학술 → 비학술 목적(자소서, 기획, 비즈니스)에서 "
+        "'본 연구는', '본 논문에서는', '분석 결과', '통계적으로 유의미한' 같은 표현은 "
+        "개인 경험 기반 성과 표현 또는 문제 해결 서술로 변환하라. "
+        "SNS → 학술/논문에서는 감정 과잉 표현, 구어체, 과장 표현, 이모지, 유행어를 "
+        "객관적 서술, 논리 연결, 근거 중심 문장으로 변환하라. "
+        "일기/감정 서술 → 비즈니스/기획에서는 막연한 감정 중심 문장을 "
+        "문제 정의 + 행동 + 결과 구조로 변환하라. "
+        "의미는 유지하되 언어 영역만 이동시켜라. "
+        "표현의 다양성은 유지하되 목적과 충돌하는 어조만 교정하라. "
+        "모든 문장을 획일화하지 말고 문체적 리듬과 개성은 남겨라. "
+        "각 문장을 목적 적합/부분 충돌/완전 충돌로 분류해 "
+        "유지 또는 고급화/치환/구조 재서술로 처리하라. "
+        "결과물에는 목적 언어 영역만 존재하도록 정제하라."
     )
 
     user = f"""
@@ -197,6 +212,17 @@ if run:
         st.write("-", c)
 
     st.subheader("💡 재활용 추천")
+    suggested = data.get("suggested_repurposes", [])
+    if suggested:
+        for r in suggested:
+            if isinstance(r, dict):
+                major_purpose = r.get("major_purpose", "기타")
+                minor_purpose = r.get("minor_purpose", "기타")
+                st.write(f"{major_purpose} → {minor_purpose}")
+            else:
+                st.write(r)
+    else:
+        st.caption("추천 항목이 없습니다.")
     for r in data.get("suggested_repurposes", []):
         if isinstance(r, dict):
             major_purpose = r.get("major_purpose", "기타")
