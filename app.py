@@ -247,6 +247,7 @@ if run:
     change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
     for c in change_points:
         st.write("-", c)
+if run:
 
 data = safe_json(raw)
 rewritten = data.get("rewritten_text", "")
