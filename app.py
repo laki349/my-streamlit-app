@@ -260,8 +260,8 @@ if run:
                 st.write(f"{major_purpose} → {minor_purpose}")
             else:
                 st.write(r)
-            else:
-                st.caption("추천 항목이 없습니다.")
+        else:
+            st.caption("추천 항목이 없습니다.")
 
 
     # AI Score (simple heuristic)
