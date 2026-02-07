@@ -2,7 +2,6 @@ import os
 import json
 import re
 import difflib
-from typing import Dict, Any, List
 import streamlit as st
 
 # -----------------------------
@@ -17,8 +16,6 @@ st.set_page_config(
 # -----------------------------
 # Constants
 # -----------------------------
-PERSONA_OPTIONS = ["대학생", "취준생", "기획자", "마케팅/콘텐츠 담당자", "연구/학술", "기타(직접 입력)"]
-
 MAJOR_PURPOSES = {
     "자소서/면접": ["자기소개", "지원동기", "직무역량"],
     "기획/비즈니스": ["기획서", "PRD", "제안서"],
@@ -30,11 +27,7 @@ TONE = ["격식체", "보통", "친근한", "단호한"]
 STYLE = ["논리형", "스토리텔링", "데이터 중심"]
 AUDIENCE = ["평가자", "대중", "교수"]
 
-LENGTH_PRESET = {
-    "짧게": 600,
-    "보통": 1200,
-    "길게": 2200
-}
+LENGTH_PRESET = {"짧게": 600, "보통": 1200, "길게": 2200}
 
 EDIT_INTENSITY = {
     "유지 위주": "원본 구조를 최대한 유지",
@@ -51,7 +44,7 @@ STRUCTURE_TEMPLATES = {
 }
 
 # -----------------------------
-# Diff Helpers
+# Diff Helper
 # -----------------------------
 def tokenize(text):
     return re.findall(r"\w+|[^\w\s]", text)
@@ -59,8 +52,8 @@ def tokenize(text):
 def render_diff_html(original, revised):
     a, b = tokenize(original), tokenize(revised)
     sm = difflib.SequenceMatcher(a=a, b=b)
-
     out = []
+
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
             out.append(" ".join(b[j1:j2]))
@@ -74,39 +67,22 @@ def render_diff_html(original, revised):
     return f"<div style='line-height:1.8'>{' '.join(out)}</div>"
 
 # -----------------------------
-# Insight Helpers
+# Fallback logic
 # -----------------------------
 def derive_change_points(original, rewritten):
     points = []
-    if not original.strip() or not rewritten.strip():
-        return points
-
-    delta = len(rewritten) - len(original)
-    if abs(delta) > 50:
-        points.append(f"분량이 약 {abs(delta)}자 {'확장' if delta > 0 else '축약'}되었습니다.")
-
-    if len(original.splitlines()) != len(rewritten.splitlines()):
-        points.append("문장 구조가 재배열되어 흐름이 개선되었습니다.")
-
+    if len(rewritten) - len(original) > 50:
+        points.append("내용이 확장되며 설명이 강화되었습니다.")
     if not points:
-        points.append("핵심 의미를 유지하며 표현을 정제했습니다.")
-
+        points.append("문장이 자연스럽게 정제되었습니다.")
     return points
 
 def derive_repurpose_suggestions(major, minor):
-    suggestions = []
+    results = []
     for m in MAJOR_PURPOSES.get(major, []):
         if m != minor:
-            suggestions.append({"major_purpose": major, "minor_purpose": m})
-
-    if len(suggestions) < 3:
-        for other_major, minors in MAJOR_PURPOSES.items():
-            if other_major != major:
-                suggestions.append({"major_purpose": other_major, "minor_purpose": minors[0]})
-            if len(suggestions) >= 3:
-                break
-
-    return suggestions
+            results.append({"major_purpose": major, "minor_purpose": m})
+    return results[:3]
 
 # -----------------------------
 # OpenAI Call
@@ -115,7 +91,7 @@ def call_openai(api_key, model, system_prompt, user_prompt, temperature):
     from openai import OpenAI
     client = OpenAI(api_key=api_key)
 
-    res = client.responses.create(
+    resp = client.responses.create(
         model=model,
         temperature=temperature,
         input=[
@@ -123,14 +99,14 @@ def call_openai(api_key, model, system_prompt, user_prompt, temperature):
             {"role": "user", "content": user_prompt},
         ]
     )
-    return res.output_text
+    return resp.output_text
 
 def safe_json(text):
     try:
         return json.loads(text)
     except:
-        match = re.search(r"\{.*\}", text, re.S)
-        return json.loads(match.group()) if match else {}
+        m = re.search(r"\{.*\}", text, re.S)
+        return json.loads(m.group()) if m else {}
 
 # -----------------------------
 # Prompt Builder
@@ -139,13 +115,12 @@ def build_prompt(p):
     template = STRUCTURE_TEMPLATES.get(p["minor"], "논리적 구조")
 
     system = (
-        "너는 전문 편집자다. 사실은 유지하고 목적에 맞는 언어 영역으로 변환한다. "
-        "출력은 반드시 JSON 형식으로 반환한다."
+        "너는 전문 텍스트 편집자이자 목적 기반 리라이팅 전문가다. "
+        "사실 정보는 유지하고 표현만 목적에 맞는 언어 영역으로 변환하라. "
+        "문체 다양성을 유지하며 획일화하지 마라. "
+        "부적절한 표현은 삭제하지 말고 치환하라. "
+        "결과는 JSON만 반환하라."
     )
-
-    expand = ""
-    if p["expand"]:
-        expand = "\nexpanded_text에는 목적에 맞게 논리를 보강한 문장을 추가한다."
 
     user = f"""
 원본:
@@ -154,12 +129,10 @@ def build_prompt(p):
 목적: {p["major"]} → {p["minor"]}
 구조: {template}
 편집 강도: {EDIT_INTENSITY[p["edit"]]}
-톤: {p["tone"]}, 스타일: {p["style"]}, 독자: {p["audience"]}
+톤: {p["tone"]}
+스타일: {p["style"]}
+독자: {p["audience"]}
 분량: {p["length"]}자
-
-목적에 맞지 않는 표현은 목적 언어로 치환하라.
-
-{expand}
 
 JSON:
 {{
@@ -169,13 +142,13 @@ JSON:
  "suggested_repurposes": []
 }}
 """
+
     return system, user
 
 # -----------------------------
 # Sidebar
 # -----------------------------
 with st.sidebar:
-    st.header("⚙️ 설정")
     api_key = st.text_input("API Key", type="password")
     model = st.selectbox("모델", ["gpt-4o-mini", "gpt-4.1-mini"])
     major = st.selectbox("대목적", MAJOR_PURPOSES.keys())
@@ -183,10 +156,9 @@ with st.sidebar:
     tone = st.selectbox("톤", TONE)
     style = st.selectbox("스타일", STYLE)
     audience = st.selectbox("독자", AUDIENCE)
-    length_key = st.select_slider("분량", list(LENGTH_PRESET.keys()))
-    edit_level = st.select_slider("편집 강도", list(EDIT_INTENSITY.keys()))
+    length_key = st.select_slider("분량", LENGTH_PRESET.keys())
+    edit_level = st.select_slider("편집 강도", EDIT_INTENSITY.keys())
     temperature = st.slider("창의성", 0.0, 1.0, 0.5)
-    expand_text = st.checkbox("내용 확장", True)
 
 # -----------------------------
 # Main
@@ -194,10 +166,8 @@ with st.sidebar:
 st.title("🛠️ RePurpose")
 
 original_text = st.text_area("원본 텍스트", height=280)
-run = st.button("변환")
 
-if run and original_text.strip():
-
+if st.button("변환"):
     payload = {
         "text": original_text,
         "major": major,
@@ -206,42 +176,28 @@ if run and original_text.strip():
         "style": style,
         "audience": audience,
         "length": LENGTH_PRESET[length_key],
-        "edit": edit_level,
-        "expand": expand_text
+        "edit": edit_level
     }
 
     system, user = build_prompt(payload)
 
-    with st.spinner("변환 중..."):
-        raw = call_openai(api_key, model, system, user, temperature)
-
+    raw = call_openai(api_key, model, system, user, temperature)
     data = safe_json(raw)
 
     rewritten = data.get("rewritten_text", "")
-    expanded = data.get("expanded_text", "")
 
     st.subheader("✅ 변환 결과")
     st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
 
-    if expand_text and expanded:
-        st.subheader("✨ 확장 결과")
-        st.write(expanded)
-
     st.subheader("🔍 변경 포인트")
-    for p in data.get("change_points", []) or derive_change_points(original_text, rewritten):
-        st.write("-", p)
+    for c in data.get("change_points", []) or derive_change_points(original_text, rewritten):
+        st.write("-", c)
 
     st.subheader("💡 재활용 추천")
-
     suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
 
     for r in suggested:
-        st.write(f"{r['major_purpose']} → {r['minor_purpose']}")
-
-    st.subheader("📈 품질 점수")
-    score = min(95, 60 + len(rewritten)//200)
-    st.progress(score/100)
-    st.write(f"{score}/100")
-
-    st.download_button("TXT 다운로드", rewritten, file_name="result.txt")
-    st.download_button("MD 다운로드", rewritten, file_name="result.md")
+        if isinstance(r, dict):
+            st.write(f"{r.get('major_purpose')} → {r.get('minor_purpose')}")
+        else:
+            st.write(str(r))
