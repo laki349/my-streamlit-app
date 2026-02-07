@@ -244,9 +244,18 @@ if run:
             st.caption("표시할 이유가 없습니다.")
 
     st.subheader("🔍 변경 포인트")
-    change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
+
+    change_points = data.get("change_points") or derive_change_points(original_text, rewritten)
+
     for c in change_points:
-        st.write("-", c)
+        if isinstance(c, dict):
+            st.markdown(
+                f"**원문:** {c.get('original','')}\n\n"
+                f"➡️ **변경:** {c.get('rewritten','')}"
+            )
+        else:
+            st.write("•", c)
+
 if run:
     data = safe_json(raw)
     rewritten = data.get("rewritten_text", "")
