@@ -223,6 +223,13 @@ if run:
                 st.write(r)
     else:
         st.caption("추천 항목이 없습니다.")
+    for r in data.get("suggested_repurposes", []):
+        if isinstance(r, dict):
+            major_purpose = r.get("major_purpose", "기타")
+            minor_purpose = r.get("minor_purpose", "기타")
+            st.write(f"{major_purpose} → {minor_purpose}")
+        else:
+            st.write(r)
 
     # AI Score (simple heuristic)
     st.subheader("📈 품질 점수")
