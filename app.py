@@ -248,6 +248,9 @@ if run:
     for c in change_points:
         st.write("-", c)
 
+data = safe_json(raw)
+rewritten = data.get("rewritten_text", "")
+
 st.subheader("💡 재활용 추천")
 
 suggested = data.get("suggested_repurposes") or derive_repurpose_suggestions(major, minor)
