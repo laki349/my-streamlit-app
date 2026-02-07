@@ -104,8 +104,13 @@ def build_prompt(p):
     template = STRUCTURE_TEMPLATES.get(p["minor"], "논리적 구조로 구성")
 
     system = (
-        "너는 편집자다. 사실을 유지하며 목적에 맞게 글을 재구성하라. "
-        "출력은 JSON만 반환하라."
+        "너는 전문 텍스트 편집자이자 목적 기반 리라이팅 전문가다. "
+        "모든 사실 정보는 유지하되, 표현 방식만 목적에 맞는 언어 영역(register)으로 변환하라. "
+        "학술, 비즈니스, SNS, 자기소개서 각각의 문체 차이를 엄격히 구분하여 적용하라. "
+        "부적절한 관용구, 도메인 표현, 톤은 제거하지 말고 반드시 목적에 맞게 치환하라. "
+        "문체의 다양성과 리듬은 유지하고 문장을 획일화하지 마라. "
+        "추론 설명 없이 결과만 JSON으로 반환하라. "
+        "원문에 없는 정보라도 목적에 어울리는 홍보/설명/맥락 요소를 자의적으로 추가할 수 있다."
     )
 
     user = f"""
@@ -122,6 +127,7 @@ JSON:
 {{
  "rewritten_text": "",
  "change_points": [],
+ "highlight_reasons": [],
  "detected_original_traits": [],
  "suggested_repurposes": []
 }}
@@ -174,7 +180,17 @@ if run:
     rewritten = data.get("rewritten_text", "")
 
     st.subheader("✅ 변환 결과 (하이라이트)")
-    st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+    highlight_reasons = data.get("highlight_reasons") or data.get("change_points", [])
+    result_col, reason_col = st.columns([2, 1])
+    with result_col:
+        st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+    with reason_col:
+        st.markdown("**하이라이트 이유**")
+        if highlight_reasons:
+            for reason in highlight_reasons:
+                st.write("-", reason)
+        else:
+            st.caption("표시할 이유가 없습니다.")
 
     st.subheader("🔍 변경 포인트")
     for c in data.get("change_points", []):
@@ -182,7 +198,12 @@ if run:
 
     st.subheader("💡 재활용 추천")
     for r in data.get("suggested_repurposes", []):
-        st.write(f"{r['major_purpose']} → {r['minor_purpose']}")
+        if isinstance(r, dict):
+            major_purpose = r.get("major_purpose", "기타")
+            minor_purpose = r.get("minor_purpose", "기타")
+            st.write(f"{major_purpose} → {minor_purpose}")
+        else:
+            st.write(r)
 
     # AI Score (simple heuristic)
     st.subheader("📈 품질 점수")
