@@ -248,20 +248,20 @@ if run:
     for c in change_points:
         st.write("-", c)
 
-    st.subheader("💡 재활용 추천")
+st.subheader("💡 재활용 추천")
 
-    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
+suggested = data.get("suggested_repurposes") or derive_repurpose_suggestions(major, minor)
 
-    if suggested:
-        for r in suggested:
-            if isinstance(r, dict):
-                major_purpose = r.get("major_purpose", "기타")
-                minor_purpose = r.get("minor_purpose", "기타")
-                st.write(f"{major_purpose} → {minor_purpose}")
-            else:
-                st.write(r)
+if suggested:
+    for r in suggested:
+        if isinstance(r, dict):
+            major_purpose = r.get("major_purpose", "기타")
+            minor_purpose = r.get("minor_purpose", "기타")
+            st.write(f"{major_purpose} → {minor_purpose}")
         else:
-            st.caption("추천 항목이 없습니다.")
+            st.write(r)
+else:
+    st.caption("추천 항목이 없습니다.")
 
 
     # AI Score (simple heuristic)
