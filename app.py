@@ -162,6 +162,9 @@ def build_prompt(p):
 편집 강도: {EDIT_INTENSITY[p["edit"]]}
 톤: {p["tone"]}, 스타일: {p["style"]}, 독자: {p["audience"]}
 분량: {p["length"]}자
+목적 필터링:
+- 목적에 맞지 않는 관용구/도메인 표현은 제거 또는 치환하라.
+- 예: 비즈니스 제안서에는 '본 연구는' 같은 학술 표현을 사용하지 않는다.
 [목적 기반 언어 스타일 필터링 규칙]
 
 1. 각 목적에는 고유한 언어 영역(register)이 존재한다.
@@ -263,9 +266,11 @@ if run:
         st.subheader("✨ 확장 결과 (목적 중심 보강)")
         st.write(expanded)
 
+
     if expand_text and expanded:
         st.subheader("✨ 확장 결과 (목적 중심 보강)")
         st.write(expanded)
+
 
     st.subheader("🔍 변경 포인트")
     change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
@@ -273,15 +278,24 @@ if run:
         st.write("-", c)
 
     st.subheader("💡 재활용 추천")
-    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
-    for r in suggested:
-    for r in data.get("suggested_repurposes", []):
+
+suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(
+    major_purpose, minor_purpose
+)
+
+for r in suggested:
+    if isinstance(r, dict):
+        major_purpose = r.get("major_purpose", "기타")
+        minor_purpose = r.get("minor_purpose", "추천")
+        st.write(f"{major_purpose} → {minor_purpose}")
+    else:
+        st.write(str(r))
         if isinstance(r, dict):
             major_purpose = r.get("major_purpose", "기타")
             minor_purpose = r.get("minor_purpose", "추천")
             st.write(f"{major_purpose} → {minor_purpose}")
         else:
-            st.write(f"{r}")
+            st.write(str(r))
 
     # AI Score (simple heuristic)
     st.subheader("📈 품질 점수")
