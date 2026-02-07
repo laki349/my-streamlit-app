@@ -74,6 +74,42 @@ def render_diff_html(original, revised):
     return f"<div style='line-height:1.8'>{' '.join(out)}</div>"
 
 # -----------------------------
+# Insight Helpers
+# -----------------------------
+def derive_change_points(original, rewritten):
+    points = []
+    if not original.strip() or not rewritten.strip():
+        return points
+
+    length_delta = len(rewritten) - len(original)
+    if abs(length_delta) >= 50:
+        direction = "확장" if length_delta > 0 else "축약"
+        points.append(f"분량이 약 {abs(length_delta)}자 {direction}되었습니다.")
+
+    original_lines = [line.strip() for line in original.splitlines() if line.strip()]
+    rewritten_lines = [line.strip() for line in rewritten.splitlines() if line.strip()]
+    if len(rewritten_lines) != len(original_lines):
+        points.append("문장 구성이 재배열되어 흐름이 다듬어졌습니다.")
+
+    if not points:
+        points.append("핵심 표현을 유지하면서 문장을 매끄럽게 다듬었습니다.")
+    return points
+
+def derive_repurpose_suggestions(major, minor):
+    suggestions = []
+    for item in MAJOR_PURPOSES.get(major, []):
+        if item != minor:
+            suggestions.append({"major_purpose": major, "minor_purpose": item})
+    if len(suggestions) < 2:
+        for other_major, minors in MAJOR_PURPOSES.items():
+            if other_major == major:
+                continue
+            suggestions.append({"major_purpose": other_major, "minor_purpose": minors[0]})
+            if len(suggestions) >= 3:
+                break
+    return suggestions
+
+# -----------------------------
 # AI Call (OpenAI v1+)
 # -----------------------------
 def call_openai(api_key, model, system_prompt, user_prompt, temperature):
@@ -105,6 +141,7 @@ def build_prompt(p):
 
     system = (
         "너는 편집자다. 사실을 유지하며 목적에 맞게 글을 재구성하라. "
+        "문체와 관용구를 목적에 맞게 재작성하고, 목적과 어울리지 않는 표현은 제거하라. "
         "출력은 JSON만 반환하라."
     )
 
@@ -125,6 +162,38 @@ def build_prompt(p):
 편집 강도: {EDIT_INTENSITY[p["edit"]]}
 톤: {p["tone"]}, 스타일: {p["style"]}, 독자: {p["audience"]}
 분량: {p["length"]}자
+[목적 기반 언어 스타일 필터링 규칙]
+
+1. 각 목적에는 고유한 언어 영역(register)이 존재한다.
+   너는 원본 표현을 삭제하지 말고, 목적에 맞는 표현으로 '변환(치환)'하라.
+
+2. 아래의 스타일 충돌 패턴을 감지하고 수정하라:
+
+[학술 → 비학술 목적(자소서, 기획, 비즈니스)]
+- "본 연구는", "본 논문에서는", "분석 결과", "통계적으로 유의미한"
+→ 개인 경험 기반 성과 표현 또는 문제 해결 서술로 변환
+예: "본 연구는 문제를 분석하였다" → "문제를 구조적으로 분석하고 해결 방안을 도출했다"
+
+[SNS → 학술/논문]
+- 감정 과잉 표현, 구어체, 과장 표현, 이모지, 유행어
+→ 객관적 서술, 논리 연결, 근거 중심 문장으로 변환
+
+[일기/감정 서술 → 비즈니스/기획]
+- 막연한 감정 중심 문장
+→ 문제 정의 + 행동 + 결과 구조로 변환
+
+3. 변환 시 반드시 다음 원칙을 따른다:
+- 의미는 유지하되 언어 영역만 이동시킨다 (semantic preservation)
+- 표현의 다양성은 유지하되 목적과 충돌하는 어조만 교정한다
+- 모든 문장을 획일화하지 말고 문체적 리듬과 개성은 남긴다
+
+4. 각 문장을 다음 중 하나로 분류하고 처리하라:
+- 목적 적합 → 유지 또는 고급화
+- 부분 충돌 → 목적 언어로 치환
+- 완전 충돌 → 구조 재서술
+
+5. 결과물에는 목적 언어 영역만 존재하도록 정제하라.
+
 {expansion_instruction}
 
 JSON:
@@ -188,16 +257,24 @@ if run:
 
     st.subheader("✅ 변환 결과 (하이라이트)")
     st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+    st.caption("🟩 추가된 문장 · 🟨 수정된 문장 · 취소선은 삭제된 표현")
+
+    if expand_text and expanded:
+        st.subheader("✨ 확장 결과 (목적 중심 보강)")
+        st.write(expanded)
 
     if expand_text and expanded:
         st.subheader("✨ 확장 결과 (목적 중심 보강)")
         st.write(expanded)
 
     st.subheader("🔍 변경 포인트")
-    for c in data.get("change_points", []):
+    change_points = data.get("change_points", []) or derive_change_points(original_text, rewritten)
+    for c in change_points:
         st.write("-", c)
 
     st.subheader("💡 재활용 추천")
+    suggested = data.get("suggested_repurposes", []) or derive_repurpose_suggestions(major, minor)
+    for r in suggested:
     for r in data.get("suggested_repurposes", []):
         if isinstance(r, dict):
             major_purpose = r.get("major_purpose", "기타")
