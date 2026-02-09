@@ -7,6 +7,35 @@ import difflib
 from typing import Dict, Any, List, Tuple
 import streamlit as st
 
+    # -----------------------------
+    # Dual Output Workspace (NEW UI)
+    # -----------------------------
+
+    st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>📄 텍스트 비교 워크스페이스</h3>", unsafe_allow_html=True)
+
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.markdown("### 원문 텍스트")
+        st.text_area(
+            "original_view",
+            original_text,
+            height=420,
+            key="original_display"
+        )
+
+    with right_col:
+        st.markdown("### 변환된 텍스트")
+        st.text_area(
+            "rewritten_view",
+            rewritten,
+            height=420,
+            key="rewritten_display"
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # -----------------------------
 # Page config
 # -----------------------------
