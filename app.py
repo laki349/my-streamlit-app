@@ -17,16 +17,26 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        :root {
-            --primary-start: #6A5CFF;
-            --primary-end: #9B8CFF;
-            --accent-soft: #E9E6FF;
-            --card-shadow: 0 12px 30px rgba(38, 34, 98, 0.12);
-            --card-radius: 22px;
-        }
+        
+  :root {
+    --primary-start: #6A5CFF;
+    --primary-end: #9B8CFF;
+    --accent-soft: #E9E6FF;
 
-        .stApp {
-            background: linear-gradient(135deg, #F5F4FF 0%, #F7F9FC 45%, #EEF1FF 100%);
+    --card-shadow: 0 10px 28px rgba(38, 34, 98, 0.10);
+    --card-radius: 22px;
+    --border-subtle: #E8EAF3;
+}
+
+.stApp {
+  background: linear-gradient(
+    135deg,
+    #F5F4FF 0%,
+    #F7F9FC 45%,
+    #EEF1FF 100%
+  );
+}
+
         }
 
         .main-wrap {
@@ -42,6 +52,9 @@ st.markdown(
             color: white;
             box-shadow: var(--card-shadow);
             margin-bottom: 28px;
+            position: sticky;
+            top: 16px;
+            z-index: 5;
         }
 
         .header-card h1 {
@@ -61,6 +74,7 @@ st.markdown(
             padding: 28px 32px;
             box-shadow: var(--card-shadow);
             margin-bottom: 28px;
+            border: 1px solid var(--border-subtle);
         }
 
         .content-card h3,
@@ -78,11 +92,11 @@ st.markdown(
             background: linear-gradient(120deg, var(--primary-start), var(--primary-end));
             color: white;
             border: none;
-            padding: 0.9rem 2.6rem;
-            border-radius: 999px;
-            font-size: 1.05rem;
+            padding: 0.9rem 2.4rem;
+            border-radius: 16px;
+            font-size: 1.02rem;
             font-weight: 600;
-            box-shadow: 0 10px 24px rgba(106, 92, 255, 0.28);
+            box-shadow: 0 10px 24px rgba(106, 92, 255, 0.24);
         }
 
         .stButton > button:hover {
@@ -90,11 +104,11 @@ st.markdown(
         }
 
         .pill-download button {
-            background: #F3F2FF;
+            background: #F5F6FF;
             color: #4A3DEB;
             border: 1px solid #D9D4FF;
-            border-radius: 999px;
-            padding: 0.5rem 1.4rem;
+            border-radius: 14px;
+            padding: 0.55rem 1.4rem;
         }
 
         [data-testid="stSidebar"] {
@@ -107,6 +121,7 @@ st.markdown(
             margin: 16px;
             padding: 20px 20px 28px;
             box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-subtle);
         }
 
         .sidebar-header {
