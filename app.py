@@ -1,3 +1,4 @@
+
 import os
 import json
 import re
@@ -12,6 +13,120 @@ st.set_page_config(
     page_title="RePurpose | 목적 기반 텍스트 변환",
     page_icon="🛠️",
     layout="wide"
+)
+
+st.markdown(
+    """
+    <style>
+        :root {
+            --primary-start: #6A5CFF;
+            --primary-end: #9B8CFF;
+            --accent-soft: #E9E6FF;
+            --card-shadow: 0 12px 30px rgba(38, 34, 98, 0.12);
+            --card-radius: 22px;
+        }
+
+        .stApp {
+            background: linear-gradient(135deg, #F5F4FF 0%, #F7F9FC 45%, #EEF1FF 100%);
+        }
+
+        .main-wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 32px 80px;
+        }
+
+        .header-card {
+            background: linear-gradient(120deg, var(--primary-start), var(--primary-end));
+            border-radius: var(--card-radius);
+            padding: 28px 32px;
+            color: white;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 28px;
+        }
+
+        .header-card h1 {
+            font-size: 2.4rem;
+            margin-bottom: 6px;
+        }
+
+        .header-subtitle {
+            font-size: 1rem;
+            opacity: 0.85;
+            margin: 0;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: var(--card-radius);
+            padding: 28px 32px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 28px;
+        }
+
+        .content-card h3,
+        .content-card h4 {
+            margin-top: 0;
+        }
+
+        .primary-action {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0 30px;
+        }
+
+        .stButton > button {
+            background: linear-gradient(120deg, var(--primary-start), var(--primary-end));
+            color: white;
+            border: none;
+            padding: 0.9rem 2.6rem;
+            border-radius: 999px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            box-shadow: 0 10px 24px rgba(106, 92, 255, 0.28);
+        }
+
+        .stButton > button:hover {
+            filter: brightness(1.02);
+        }
+
+        .pill-download button {
+            background: #F3F2FF;
+            color: #4A3DEB;
+            border: 1px solid #D9D4FF;
+            border-radius: 999px;
+            padding: 0.5rem 1.4rem;
+        }
+
+        [data-testid="stSidebar"] {
+            background: transparent;
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            background: white;
+            border-radius: var(--card-radius);
+            margin: 16px;
+            padding: 20px 20px 28px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .sidebar-header {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+
+        .section-grid {
+            display: grid;
+            gap: 22px;
+        }
+
+        .divider-space {
+            height: 4px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 # -----------------------------
@@ -195,7 +310,7 @@ JSON:
 # UI Sidebar
 # -----------------------------
 with st.sidebar:
-    st.header("⚙️ 설정")
+    st.markdown("<div class='sidebar-header'>⚙️ 설정</div>", unsafe_allow_html=True)
     api_key = st.text_input("API Key", type="password")
     model = st.selectbox("모델", ["gpt-4o-mini", "gpt-4.1-mini"])
     persona = st.selectbox("특성", PERSONA_OPTIONS)
@@ -211,10 +326,23 @@ with st.sidebar:
 # -----------------------------
 # Main
 # -----------------------------
+st.markdown("<div class='main-wrap'>", unsafe_allow_html=True)
+st.markdown("<div class='header-card'>", unsafe_allow_html=True)
 st.title("🛠️ RePurpose")
+st.markdown(
+    "<p class='header-subtitle'>목적 기반 텍스트 리라이팅을 위한 스마트 편집 워크스페이스</p>",
+    unsafe_allow_html=True
+)
+st.markdown("</div>", unsafe_allow_html=True)
 
+st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+st.markdown("<h3>원본 텍스트 입력</h3>", unsafe_allow_html=True)
 original_text = st.text_area("원본 텍스트", height=280)
+st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<div class='primary-action'>", unsafe_allow_html=True)
 run = st.button("변환")
+st.markdown("</div>", unsafe_allow_html=True)
 
 if run:
     payload = {
@@ -236,7 +364,8 @@ if run:
     data = safe_json(raw)
     rewritten = data.get("rewritten_text", "")
 
-    st.subheader("✅ 변환 결과 (하이라이트)")
+    st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>✅ 변환 결과 (하이라이트)</h3>", unsafe_allow_html=True)
     highlight_reasons = data.get("highlight_reasons") or data.get("change_points", [])
     result_col, reason_col = st.columns([2, 1])
     with result_col:
@@ -248,8 +377,10 @@ if run:
                 st.write("-", reason)
         else:
             st.caption("표시할 이유가 없습니다.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.subheader("🔍 변경 포인트")
+    st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>🔍 변경 포인트</h3>", unsafe_allow_html=True)
 
     change_points = data.get("change_points") or derive_change_points(original_text, rewritten)
 
@@ -261,34 +392,54 @@ if run:
             )
         else:
             st.write("•", c)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 if run:
     data = safe_json(raw)
     rewritten = data.get("rewritten_text", "")
 
-    st.subheader("💡 재활용 추천")
+    card_col_left, card_col_right = st.columns(2)
+    with card_col_left:
+        st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+        st.markdown("<h3>💡 재활용 추천</h3>", unsafe_allow_html=True)
 
-    suggested = data.get("suggested_repurposes") or derive_repurpose_suggestions(major, minor)
+        suggested = data.get("suggested_repurposes") or derive_repurpose_suggestions(major, minor)
 
-    if suggested:
-        for r in suggested:
-            if isinstance(r, dict):
-                major_purpose = r.get("major_purpose", "기타")
-                minor_purpose = r.get("minor_purpose", "기타")
-                st.write(f"{major_purpose} → {minor_purpose}")
-            else:
-                st.write(r)
-    else:
-        st.caption("추천 항목이 없습니다.")
+        if suggested:
+            for r in suggested:
+                if isinstance(r, dict):
+                    major_purpose = r.get("major_purpose", "기타")
+                    minor_purpose = r.get("minor_purpose", "기타")
+                    st.write(f"{major_purpose} → {minor_purpose}")
+                else:
+                    st.write(r)
+        else:
+            st.caption("추천 항목이 없습니다.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 
     # AI Score (simple heuristic)
-    st.subheader("📈 품질 점수")
-    score = min(95, 60 + len(rewritten)//200)
-    st.progress(score/100)
-    st.write(f"{score}/100")
+    with card_col_right:
+        st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+        st.markdown("<h3>📈 품질 점수</h3>", unsafe_allow_html=True)
+        score = min(95, 60 + len(rewritten)//200)
+        st.progress(score/100)
+        st.write(f"{score}/100")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Downloads
-    st.download_button("TXT 다운로드", rewritten, file_name="result.txt")
-    st.download_button("MD 다운로드", rewritten, file_name="result.md")
+    st.markdown("<div class='content-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>⬇️ 다운로드</h3>", unsafe_allow_html=True)
+    download_col1, download_col2 = st.columns(2)
+    with download_col1:
+        st.markdown("<div class='pill-download'>", unsafe_allow_html=True)
+        st.download_button("TXT 다운로드", rewritten, file_name="result.txt")
+        st.markdown("</div>", unsafe_allow_html=True)
+    with download_col2:
+        st.markdown("<div class='pill-download'>", unsafe_allow_html=True)
+        st.download_button("MD 다운로드", rewritten, file_name="result.md")
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
