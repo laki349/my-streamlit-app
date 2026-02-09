@@ -17,17 +17,26 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        :root {
-            --primary-start: #6A5CFF;
-            --primary-end: #9B8CFF;
-            --accent-soft: #E9E6FF;
-            --card-shadow: 0 8px 20px rgba(17, 24, 39, 0.08);
-            --card-radius: 20px;
-            --border-subtle: #E8EAF3;
-        }
+        
+  :root {
+    --primary-start: #6A5CFF;
+    --primary-end: #9B8CFF;
+    --accent-soft: #E9E6FF;
 
-        .stApp {
-            background: #F6F7FB;
+    --card-shadow: 0 10px 28px rgba(38, 34, 98, 0.10);
+    --card-radius: 22px;
+    --border-subtle: #E8EAF3;
+}
+
+.stApp {
+  background: linear-gradient(
+    135deg,
+    #F5F4FF 0%,
+    #F7F9FC 45%,
+    #EEF1FF 100%
+  );
+}
+
         }
 
         .main-wrap {
@@ -121,6 +130,14 @@ st.markdown(
             margin-bottom: 12px;
         }
 
+        .section-grid {
+            display: grid;
+            gap: 22px;
+        }
+
+        .divider-space {
+            height: 4px;
+        }
     </style>
     """,
     unsafe_allow_html=True
