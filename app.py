@@ -233,6 +233,34 @@ def safe_json(text):
         m = re.search(r"\{.*\}", text, re.S)
         return json.loads(m.group()) if m else {}
 
+def normalize_rewritten(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+
+    # dict -> sections면 합치고, 아니면 json dump
+    if isinstance(value, dict):
+        if isinstance(value.get("sections"), list):
+            parts = []
+            for sec in value["sections"]:
+                if not isinstance(sec, dict):
+                    continue
+                h = (sec.get("heading") or "").strip()
+                c = (sec.get("content") or sec.get("text") or "").strip()
+                if h and c:
+                    parts.append(f"### {h}\n{c}")
+                elif c:
+                    parts.append(c)
+            return "\n\n".join(parts).strip()
+        return json.dumps(value, ensure_ascii=False, indent=2)
+
+    # list면 줄바꿈으로
+    if isinstance(value, list):
+        return "\n".join([str(v) for v in value]).strip()
+
+    return str(value)
+
 def derive_change_points(original, rewritten):
     points = []
     if not original.strip() or not rewritten.strip():
@@ -898,7 +926,8 @@ with tab_write:
                     with st.spinner("변환 중..."):
                         raw = call_openai(api_key, model, system, user, temperature)
                     data = safe_json(raw)
-                    rewritten = data.get("rewritten_text", "")
+                    val = data.get("rewritten_text", None)
+                    rewritten = normalize_rewritten(val if val is not None else data)
 
                     st.session_state.last_raw = raw
                     st.session_state.last_data = data
@@ -1207,9 +1236,13 @@ with tab_ref:
                                 rawB = call_openai(api_key, model, sysB, usrB, temperature)
 
                             dataA, dataB = safe_json(rawA), safe_json(rawB)
-                            A_txt = dataA.get("rewritten_text","") or ""
-                            B_txt = dataB.get("rewritten_text","") or ""
 
+                            A_val = dataA.get("rewritten_text", None)
+                            B_val = dataB.get("rewritten_text", None)
+
+                            A_txt = normalize_rewritten(A_val if A_val is not None else dataA)
+                            B_txt = normalize_rewritten(B_val if B_val is not None else dataB)
+                            
                             ca, cb = st.columns(2, gap="large")
                             with ca:
                                 with st.container(border=True):
@@ -1413,7 +1446,9 @@ with tab_ref:
                                 raw = call_openai(api_key, model, sys, usr, temperature)
 
                         data = safe_json(raw)
-                        rewritten = data.get("rewritten_text", "") or ""
+                        val = data.get("rewritten_text", None)
+                        rewritten = normalize_rewritten(val if val is not None else data)
+                        
                         st.session_state.last_data = data
                         st.session_state.last_rewritten = rewritten
                         st.success("완료! 작성 탭에서 결과를 확인하세요.")
