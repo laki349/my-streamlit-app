@@ -936,7 +936,7 @@ with tab_write:
             data = st.session_state.last_data or {}
             rewritten = st.session_state.last_rewritten or ""
 
-            if rewritten.strip() and original_text.strip():
+            if isinstance(rewritten, str) and rewritten.strip() and original_text.strip():
                 st.markdown("**하이라이트(변경점 표시)**")
                 st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
 
