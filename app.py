@@ -1221,13 +1221,7 @@ with tab_ref:
                                     st.markdown("**B 결과**")
                                     st.text_area("B", B_txt, height=280, label_visibility="collapsed")
                                     st.download_button("B 다운로드", B_txt, file_name="result_B.txt")
-                else:
-                    pasted = st.text_area("레퍼런스 텍스트 붙여넣기", height=160)
-                    if st.button("레퍼런스로 설정"):
-                        st.session_state.reference_text = pasted or ""
-                        st.session_state.reference_meta = {"source": "pasted"}
-                        st.success("레퍼런스를 설정했습니다.")
-
+                                
             st.divider()
             st.subheader("📌 현재 레퍼런스 미리보기")
             if st.session_state.reference_text.strip():
@@ -1593,12 +1587,6 @@ with tab_ref:
                         st.download_button("TXT 다운로드", rewritten, file_name="sns_result.txt")
                     with d2:
                         st.download_button("MD 다운로드", rewritten, file_name="sns_result.md")
-            else:
-                pasted = st.text_area("레퍼런스 텍스트 붙여넣기", height=200)
-                if st.button("레퍼런스로 설정"):
-                    st.session_state.reference_text = pasted or ""
-                    st.session_state.reference_meta = {"source": "pasted"}
-                    st.success("레퍼런스를 설정했습니다.")
 
             st.divider()
             st.subheader("📌 현재 레퍼런스 미리보기")
