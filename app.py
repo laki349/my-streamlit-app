@@ -1232,7 +1232,7 @@ with tab_ref:
                     st.success("레퍼런스를 비웠습니다.")
             else:
                 st.caption("레퍼런스를 설정하면 여기에서 확인할 수 있어요.")
-    elif major == "학술/논문":
+        elif major == "학술/논문":
         # =====================================================
         # 논문 전용: 단계형 UX
         # Step 1) 레퍼런스(초록/서론/논문) 설정
@@ -1242,15 +1242,23 @@ with tab_ref:
         with st.container(border=True):
             st.subheader("📄 논문 템플릿 워크플로우")
             st.caption("학술/논문 목적에서만 보입니다. 서론/결론을 논문 톤으로 안정적으로 만들기 위해 템플릿 채움을 권장합니다.")
-            step = st.radio("단계", ["1) 레퍼런스 설정", "2) 템플릿/라이브러리", "3) 변환 실행"], horizontal=True)
+            step = st.radio(
+                "단계",
+                ["1) 레퍼런스 설정", "2) 템플릿/라이브러리", "3) 변환 실행"],
+                horizontal=True,
+                key="paper_step",
+            )
 
+        # -----------------------------
+        # Step 1: reference set
+        # -----------------------------
         if step == "1) 레퍼런스 설정":
             with st.container(border=True):
                 st.markdown("### 1) 논문 레퍼런스 설정(초록/서론/관련연구)")
-                ref_mode = st.radio("방식", ["URL", "PDF", "직접 붙여넣기"], horizontal=True)
+                ref_mode = st.radio("방식", ["URL", "PDF", "직접 붙여넣기"], horizontal=True, key="paper_ref_mode")
 
                 if ref_mode == "URL":
-                    url = st.text_input("논문 URL", placeholder="arXiv/오픈 논문 페이지/학회 페이지")
+                    url = st.text_input("논문 URL", placeholder="arXiv/오픈 논문 페이지/학회 페이지", key="paper_url")
                     if st.button("가져오기", key="paper_ref_url"):
                         with st.spinner("추출 중..."):
                             txt, meta = fetch_url_text(url.strip())
@@ -1260,6 +1268,7 @@ with tab_ref:
                             st.success("레퍼런스를 설정했습니다.")
                         else:
                             st.warning("추출 실패(유료/차단 가능). PDF 업로드 또는 직접 붙여넣기를 추천.")
+
                 elif ref_mode == "PDF":
                     pdf = st.file_uploader("PDF 업로드", type=["pdf"], key="paper_pdf")
                     if st.button("PDF 텍스트 추출", key="paper_pdf_extract") and pdf is not None:
@@ -1271,6 +1280,7 @@ with tab_ref:
                             st.success("레퍼런스를 설정했습니다.")
                         else:
                             st.warning("PDF 추출 실패")
+
                 else:
                     pasted = st.text_area("레퍼런스 텍스트", height=220, key="paper_paste")
                     if st.button("레퍼런스로 설정", key="paper_apply"):
@@ -1281,7 +1291,7 @@ with tab_ref:
                 st.divider()
                 st.markdown("#### 현재 레퍼런스 미리보기")
                 if st.session_state.reference_text.strip():
-                    st.text_area("preview", st.session_state.reference_text[:7000], height=260, label_visibility="collapsed")
+                    st.text_area("preview", st.session_state.reference_text[:7000], height=260, label_visibility="collapsed", key="paper_preview")
                     if st.button("레퍼런스 비우기", key="paper_clear"):
                         st.session_state.reference_text = ""
                         st.session_state.reference_meta = {}
@@ -1289,14 +1299,20 @@ with tab_ref:
                 else:
                     st.info("레퍼런스를 설정하면 다음 단계에서 템플릿 생성이 가능합니다.")
 
+        # -----------------------------
+        # Step 2: template & library
+        # -----------------------------
         elif step == "2) 템플릿/라이브러리":
             with st.container(border=True):
                 st.markdown("### 2) 템플릿 생성 & 라이브러리 저장")
+
                 if not st.session_state.reference_text.strip():
                     st.warning("먼저 1단계에서 레퍼런스를 설정해줘.")
                 else:
                     a, b = st.columns([1, 1], gap="large")
+
                     with a:
+                        st.markdown("#### 템플릿 생성")
                         if st.button("레퍼런스로 템플릿 만들기", key="paper_make_tpl"):
                             with st.spinner("템플릿 분석 중..."):
                                 tpl = extract_template(api_key, model, st.session_state.reference_text)
@@ -1305,13 +1321,15 @@ with tab_ref:
 
                         tpl = st.session_state.reference_template or {}
                         if tpl:
-                            st.text_area("템플릿 미리보기", json.dumps(tpl, ensure_ascii=False, indent=2), height=260)
+                            st.text_area("템플릿 미리보기", json.dumps(tpl, ensure_ascii=False, indent=2), height=260, key="paper_tpl_preview")
                         else:
                             st.caption("아직 템플릿이 없습니다. 버튼을 눌러 생성하세요.")
 
                     with b:
+                        st.markdown("#### 라이브러리 저장/불러오기")
                         lib_name = st.text_input("저장 이름", placeholder="예: RL 논문 서론 템플릿 A", key="paper_lib_name")
                         save_btn = st.button("현재 레퍼런스 저장", key="paper_lib_save")
+
                         if save_btn:
                             tpl = st.session_state.reference_template or simple_structure_guess(st.session_state.reference_text)
                             library_add(
@@ -1327,12 +1345,17 @@ with tab_ref:
                         st.divider()
                         items = library_items_for_major("학술/논문")
                         if items:
-                            idx = st.selectbox("저장된 템플릿", list(range(len(items))), format_func=lambda i: render_library_label(items[i]), key="paper_pick")
+                            idx = st.selectbox(
+                                "저장된 템플릿",
+                                list(range(len(items))),
+                                format_func=lambda i: render_library_label(items[i]),
+                                key="paper_pick"
+                            )
                             col1, col2 = st.columns(2)
                             with col1:
                                 if st.button("로드", key="paper_load"):
                                     it = items[idx]
-                                    st.session_state.reference_text = it.get("text","")
+                                    st.session_state.reference_text = it.get("text", "")
                                     st.session_state.reference_meta = it.get("meta") or {}
                                     st.session_state.reference_template = it.get("template") or {}
                                     st.success("라이브러리 템플릿을 로드했습니다.")
@@ -1344,16 +1367,25 @@ with tab_ref:
                         else:
                             st.caption("저장된 논문 레퍼런스가 없습니다.")
 
+        # -----------------------------
+        # Step 3: run transform
+        # -----------------------------
         else:
             with st.container(border=True):
                 st.markdown("### 3) 변환 실행(논문)")
                 st.caption("작성 탭의 원문 텍스트를 논문 톤으로 변환합니다. 템플릿 채움(안정적)을 권장합니다.")
 
-                mode = st.radio("변환 방식", ["레퍼런스 모사(기존)", "템플릿 채움(안정적)"], horizontal=True, key="paper_mode")
+                mode = st.radio(
+                    "변환 방식",
+                    ["레퍼런스 모사(기존)", "템플릿 채움(안정적)"],
+                    horizontal=True,
+                    key="paper_mode"
+                )
                 run_one = st.button("변환 실행", key="paper_run")
 
                 if run_one:
                     base_text = st.session_state.get("original_text", "").strip()
+
                     if not api_key.strip():
                         st.error("API Key를 입력해줘.")
                     elif not base_text:
@@ -1385,24 +1417,17 @@ with tab_ref:
                         st.session_state.last_data = data
                         st.session_state.last_rewritten = rewritten
                         st.success("완료! 작성 탭에서 결과를 확인하세요.")
-            else:
-                pasted = st.text_area("레퍼런스 텍스트 붙여넣기", height=160)
-                if st.button("레퍼런스로 설정"):
-                    st.session_state.reference_text = pasted or ""
-                    st.session_state.reference_meta = {"source": "pasted"}
-                    st.success("레퍼런스를 설정했습니다.")
 
             st.divider()
             st.subheader("📌 현재 레퍼런스 미리보기")
             if st.session_state.reference_text.strip():
-                st.text_area("reference", st.session_state.reference_text[:7000], height=240, label_visibility="collapsed")
-                if st.button("레퍼런스 비우기"):
+                st.text_area("reference", st.session_state.reference_text[:7000], height=240, label_visibility="collapsed", key="paper_ref_preview_bottom")
+                if st.button("레퍼런스 비우기", key="paper_clear_bottom"):
                     st.session_state.reference_text = ""
                     st.session_state.reference_meta = {}
                     st.success("레퍼런스를 비웠습니다.")
             else:
                 st.caption("레퍼런스를 설정하면 여기에서 확인할 수 있어요.")
-
     elif major == "SNS/콘텐츠":
         # ===========================
         # SNS 전용 화면 (깔끔하게 3단 구성)
