@@ -358,6 +358,41 @@ def render_result_panel(original_text: str, rewritten: str, data: Dict[str, Any]
     with d2:
         st.download_button("MD 다운로드", rewritten, file_name="result.md")
 
+def render_template_preview(tpl: Dict[str, Any]):
+    tpl = tpl or {}
+    st.markdown(f"**타입:** `{tpl.get('type','-')}`")
+
+    sections = tpl.get("sections") or []
+    rules = tpl.get("style_rules") or {}
+
+    st.markdown("**섹션 구성**")
+    if sections:
+        for i, s in enumerate(sections, 1):
+            if not isinstance(s, dict):
+                continue
+            heading = (s.get("heading") or "").strip()
+            slot = (s.get("slot") or "").strip()
+            guidance = (s.get("guidance") or "").strip()
+
+            with st.container(border=True):
+                st.markdown(f"**{i}. {heading or '(제목 없음)'}**")
+                if slot:
+                    st.caption(f"slot: {slot}")
+                if guidance:
+                    st.write(guidance)
+    else:
+        st.caption("섹션 정보가 없습니다.")
+
+    st.markdown("**스타일 규칙**")
+    if rules:
+        for k, v in rules.items():
+            st.write(f"- **{k}**: {v}")
+    else:
+        st.caption("스타일 규칙이 없습니다.")
+
+    with st.expander("원본 JSON 보기"):
+        st.json(tpl)
+
 # ============================================================
 # Reference fetchers (유지)
 # ============================================================
@@ -1210,7 +1245,7 @@ with tab_ref:
 
                         tpl = st.session_state.reference_template or {}
                         if tpl:
-                            st.text_area("템플릿 미리보기", json.dumps(tpl, ensure_ascii=False, indent=2), height=260)
+                            render_template_preview(tpl)
                         else:
                             st.caption("아직 템플릿이 없습니다. 버튼을 눌러 생성하세요.")
 
@@ -1322,6 +1357,15 @@ with tab_ref:
                                 )
 
                         st.success("완료! 아래에서 바로 결과를 확인할 수 있어요.")
+                        st.divider()
+                        st.markdown("#### ✅ 이번 실행 결과(바로 보기)")
+                        render_result_panel(
+                            original_text=st.session_state.last_original,
+                            rewritten=st.session_state.last_rewritten,
+                            data=st.session_state.last_data,
+                            major=major,
+                            minor=minor
+                        )
 
                 st.divider()
                 st.markdown("#### A/B 비교 (라이브러리 2개 이상 필요)")
