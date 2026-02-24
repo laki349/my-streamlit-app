@@ -203,6 +203,8 @@ ss_init("last_original", "")
 ss_init("last_run_context", {})  # 어디서 돌렸는지(major/minor/mode) 기록용(설명/디버그)
 ss_init("last_data", {})
 ss_init("last_rewritten", "")
+ss_init("history", [])          # 최근 실행 10개 저장
+ss_init("history_pick", 0)      # UI에서 선택된 항목 인덱스
 
 # ============================================================
 # Helpers (diff / json)
@@ -907,6 +909,22 @@ def run_transform(
     st.session_state.last_rewritten = rewritten
     st.session_state.last_original = (payload.get("text") or "").strip()
     st.session_state.last_run_context = context or {}
+        # ✅ 히스토리 저장(최근 10개)
+    hist_item = {
+        "ts": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "major": payload.get("major"),
+        "minor": payload.get("minor"),
+        "mode": mode,
+        "model": model,
+        "temperature": temperature,
+        "original": st.session_state.last_original,
+        "rewritten": st.session_state.last_rewritten,
+        "data": st.session_state.last_data,
+        "context": st.session_state.last_run_context,
+    }
+
+    st.session_state.history.insert(0, hist_item)   # 최신이 맨 위
+    st.session_state.history = st.session_state.history[:10]  # 10개만 유지
 
     return data, rewritten
 
@@ -1046,6 +1064,39 @@ with tab_write:
     with right:
         with st.container(border=True):
             st.subheader("✅ 변환 결과")
+                        # ✅ 최근 결과 히스토리(복원)
+            hist = st.session_state.history or []
+            if hist:
+                with st.expander("🕘 최근 결과(최대 10개) — 클릭해서 복원", expanded=False):
+                    labels = []
+                    for h in hist:
+                        labels.append(
+                            f"[{h['ts']}] {h.get('major','')}·{h.get('minor','')} | "
+                            f"{h.get('mode','')} | {h.get('model','')} | temp={h.get('temperature','')}"
+                        )
+
+                    pick = st.radio(
+                        "복원할 실행 선택",
+                        options=list(range(len(hist))),
+                        format_func=lambda i: labels[i],
+                        key="history_pick"
+                    )
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("이 결과로 복원", key="history_restore"):
+                            chosen = hist[pick]
+                            st.session_state.last_original = chosen["original"]
+                            st.session_state.last_rewritten = chosen["rewritten"]
+                            st.session_state.last_data = chosen["data"]
+                            st.session_state.last_run_context = chosen.get("context", {})
+                            # 원본 입력칸도 같이 되돌리고 싶으면 아래 줄 유지
+                            st.session_state.original_text = chosen["original"]
+                            st.success("복원 완료! 아래 결과가 업데이트됐어.")
+                    with c2:
+                        if st.button("히스토리 비우기", key="history_clear"):
+                            st.session_state.history = []
+                            st.success("히스토리를 비웠어.")
 
             if run:
                 if not api_key.strip():
