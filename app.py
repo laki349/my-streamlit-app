@@ -23,7 +23,7 @@ except Exception:
 # Page config
 # ============================================================
 st.set_page_config(
-    page_title="RePurpose | 목적 기반 텍스트 변환",
+    page_title="REPURPOSE | 목적 기반 텍스트 변환",
     page_icon="🛠️",
     layout="wide"
 )
@@ -199,6 +199,8 @@ ss_init("company_target", "")
 ss_init("role_target", "")
 
 ss_init("last_raw", "")
+ss_init("last_original", "")
+ss_init("last_run_context", {})  # 어디서 돌렸는지(major/minor/mode) 기록용(설명/디버그)
 ss_init("last_data", {})
 ss_init("last_rewritten", "")
 
@@ -290,6 +292,71 @@ def derive_repurpose_suggestions(major, minor):
             if len(suggestions) >= 3:
                 break
     return suggestions
+
+def render_result_panel(original_text: str, rewritten: str, data: Dict[str, Any], major: str, minor: str):
+    """
+    작성 탭/레퍼런스 탭 어디서든 동일한 결과 UI를 재사용하기 위한 패널 렌더러.
+    (기존 작성 탭 UI 구성 그대로 재사용)
+    """
+    original_text = (original_text or "").strip()
+    rewritten = (rewritten or "").strip()
+    data = data or {}
+
+    if not (original_text and rewritten):
+        st.caption("변환 실행 후 결과가 표시됩니다.")
+        return
+
+    st.markdown("**하이라이트(변경점 표시)**")
+    st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+
+    st.divider()
+
+    highlight_reasons = data.get("highlight_reasons") or data.get("change_points", [])
+    st.markdown("**하이라이트 이유**")
+    if highlight_reasons:
+        for reason in highlight_reasons:
+            st.write("-", reason)
+    else:
+        st.caption("표시할 이유가 없습니다.")
+
+    st.divider()
+
+    st.markdown("**🔍 변경 포인트**")
+    change_points = data.get("change_points") or derive_change_points(original_text, rewritten)
+    for c in change_points:
+        if isinstance(c, dict):
+            st.markdown(
+                f"**원문:** {c.get('original','')}\n\n"
+                f"➡️ **변경:** {c.get('rewritten','')}"
+            )
+        else:
+            st.write("•", c)
+
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**💡 재활용 추천**")
+        suggested = data.get("suggested_repurposes") or derive_repurpose_suggestions(major, minor)
+        for r in suggested:
+            if isinstance(r, dict):
+                st.write(f"{r.get('major_purpose','기타')} → {r.get('minor_purpose','기타')}")
+            else:
+                st.write(r)
+
+    with col2:
+        st.markdown("**📈 품질 점수**")
+        score = min(95, 60 + len(rewritten)//200)
+        st.progress(score/100)
+        st.write(f"{score}/100")
+
+    st.divider()
+
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button("TXT 다운로드", rewritten, file_name="result.txt")
+    with d2:
+        st.download_button("MD 다운로드", rewritten, file_name="result.md")
 
 # ============================================================
 # Reference fetchers (유지)
@@ -463,6 +530,7 @@ def build_sns_generate_prompt(
     emoji_level = constraints.get("emoji_level", "중간")
     cta_mode = constraints.get("cta_mode", "가볍게")
     length_mode = constraints.get("length_mode", "보통")
+    custom_hashtags = (constraints.get("custom_hashtags") or "").strip()
 
     system = (
         "너는 SNS 마케팅 카피라이터 겸 숏폼 대본 작가다. "
@@ -508,6 +576,8 @@ def build_sns_generate_prompt(
 - 이모지: {emoji_level}
 - CTA: {cta_mode}
 - 해시태그: {hashtag_mode} (개수 목표: {hashtag_count})
+- 사용자가 직접 입력한 해시태그: {custom_hashtags if custom_hashtags else "(없음)"}
+- hashtag_mode가 "직접 입력"이면, 위 해시태그를 결과 맨 아래에 그대로 붙여라(수정/재생성 금지).
 
 [출력 JSON 스키마]
 {{
@@ -768,6 +838,43 @@ def call_openai(api_key, model, system_prompt, user_prompt, temperature):
     )
     return resp.output_text
 
+def run_transform(
+    *,
+    api_key: str,
+    model: str,
+    temperature: float,
+    payload: Dict[str, Any],
+    mode: str = "reference",  # "reference" | "template"
+    template: Optional[Dict[str, Any]] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], str]:
+    """
+    공용 변환 실행기.
+    - mode="reference": build_prompt(payload)
+    - mode="template": build_prompt_template_fill(payload, template)
+    실행 결과를 session_state에 일관되게 저장한다.
+    """
+    if mode == "template":
+        ref_text = (payload.get("reference_text") or st.session_state.reference_text or "")
+        tpl = template or simple_structure_guess(ref_text)
+        sys, usr = build_prompt_template_fill(payload, tpl)
+    else:
+        sys, usr = build_prompt(payload)
+
+    raw = call_openai(api_key, model, sys, usr, temperature)
+    data = safe_json(raw)
+    val = data.get("rewritten_text", None)
+    rewritten = normalize_rewritten(val if val is not None else data)
+
+    # ✅ 공용 저장 (어디서 실행해도 작성탭/다른 탭에서 동일하게 결과 접근 가능)
+    st.session_state.last_raw = raw
+    st.session_state.last_data = data
+    st.session_state.last_rewritten = rewritten
+    st.session_state.last_original = (payload.get("text") or "").strip()
+    st.session_state.last_run_context = context or {}
+
+    return data, rewritten
+
 # ============================================================
 # Prompt Builder (레퍼런스 기반 유지)
 # ============================================================
@@ -829,7 +936,7 @@ def build_prompt(p: Dict[str, Any]):
 st.markdown(
     """
 <div class="hero">
-  <div class="title">목적 기반 텍스트 리라이팅 워크스페이스</div>
+  <div class="title">REPURPOSE — 목적 기반 텍스트 리라이팅 워크스페이스</div>
   <p class="sub">원문을 붙여넣고, 목적에 맞게 리라이팅합니다. 자소서/논문/기획/SNS는 목적에 따라 화면이 자동으로 단순화됩니다.</p>
 </div>
 """,
@@ -922,23 +1029,29 @@ with tab_write:
                         "edit": edit_level,
                         "reference_text": st.session_state.reference_text
                     }
-                    system, user = build_prompt(payload)
-                    with st.spinner("변환 중..."):
-                        raw = call_openai(api_key, model, system, user, temperature)
-                    data = safe_json(raw)
-                    val = data.get("rewritten_text", None)
-                    rewritten = normalize_rewritten(val if val is not None else data)
 
-                    st.session_state.last_raw = raw
-                    st.session_state.last_data = data
-                    st.session_state.last_rewritten = rewritten
+                    with st.spinner("변환 중..."):
+                        data, rewritten = run_transform(
+                            api_key=api_key,
+                            model=model,
+                            temperature=temperature,
+                            payload=payload,
+                            mode="reference",
+                            context={
+                                "where": "write_tab",
+                                "mode": "reference",
+                                "major": major,
+                                "minor": minor
+                            }
+                        )
 
             data = st.session_state.last_data or {}
             rewritten = st.session_state.last_rewritten or ""
+            original_for_view = (original_text or "").strip() or (st.session_state.last_original or "").strip()
 
-            if isinstance(rewritten, str) and rewritten.strip() and original_text.strip():
+            if isinstance(rewritten, str) and rewritten.strip() and original_for_view.strip():
                 st.markdown("**하이라이트(변경점 표시)**")
-                st.markdown(render_diff_html(original_text, rewritten), unsafe_allow_html=True)
+                st.markdown(render_diff_html(original_for_view, rewritten), unsafe_allow_html=True)
 
                 st.divider()
 
@@ -953,7 +1066,7 @@ with tab_write:
                 st.divider()
 
                 st.markdown("**🔍 변경 포인트**")
-                change_points = data.get("change_points") or derive_change_points(original_text, rewritten)
+                change_points = data.get("change_points") or derive_change_points(original_for_view, rewritten)
                 for c in change_points:
                     if isinstance(c, dict):
                         st.markdown(
@@ -1179,20 +1292,45 @@ with tab_ref:
                         with st.spinner("변환 중..."):
                             if mode == "템플릿 채움(안정적)":
                                 tpl = st.session_state.reference_template or simple_structure_guess(st.session_state.reference_text)
-                                sys, usr = build_prompt_template_fill(payload, tpl)
-                                raw = call_openai(api_key, model, sys, usr, temperature)
+                                data, rewritten = run_transform(
+                                    api_key=api_key,
+                                    model=model,
+                                    temperature=temperature,
+                                    payload=payload,
+                                    mode="template",
+                                    template=tpl,
+                                    context={
+                                        "where": "resume_step3_single",
+                                        "mode": "template",
+                                        "major": major,
+                                        "minor": minor
+                                    }
+                                )
                             else:
-                                sys, usr = build_prompt(payload)
-                                raw = call_openai(api_key, model, sys, usr, temperature)
+                                data, rewritten = run_transform(
+                                    api_key=api_key,
+                                    model=model,
+                                    temperature=temperature,
+                                    payload=payload,
+                                    mode="reference",
+                                    context={
+                                        "where": "resume_step3_single",
+                                        "mode": "reference",
+                                        "major": major,
+                                        "minor": minor
+                                    }
+                                )
 
-                        data = safe_json(raw)
-                        rewritten = data.get("rewritten_text", "") or ""
-                        st.session_state.last_data = data
-                        st.session_state.last_rewritten = rewritten
-                        st.success("완료! 작성 탭에서 결과를 확인하세요.")
+                        st.success("완료! 아래에서 바로 결과를 확인할 수 있어요.")
 
                 st.divider()
                 st.markdown("#### A/B 비교 (라이브러리 2개 이상 필요)")
+                st.info(
+    "A/B 비교는 **'원본 텍스트는 동일하게 두고'**, 라이브러리에서 선택한 **템플릿 A vs 템플릿 B**를 각각 적용해 "
+    "결과를 나란히 보여주는 기능입니다.\n\n"
+    "- 즉, **템플릿 구조/문체 규칙 차이**가 결과에 어떤 영향을 주는지 '템플릿 자체를 정확히 비교'할 수 있습니다.\n"
+    "- 설정(톤/스타일/독자/분량/편집강도/temperature)은 동일하게 유지됩니다."
+)
                 items = library_items_for_major("자소서/면접")
                 if len(items) < 2:
                     st.info("A/B 비교를 하려면 2단계에서 템플릿을 2개 이상 저장해줘.")
@@ -1246,12 +1384,12 @@ with tab_ref:
                             ca, cb = st.columns(2, gap="large")
                             with ca:
                                 with st.container(border=True):
-                                    st.markdown("**A 결과**")
+                                    st.markdown("**A 결과 (템플릿 A 적용)**")
                                     st.text_area("A", A_txt, height=280, label_visibility="collapsed")
                                     st.download_button("A 다운로드", A_txt, file_name="result_A.txt")
                             with cb:
                                 with st.container(border=True):
-                                    st.markdown("**B 결과**")
+                                    st.markdown("**B 결과 (템플릿 B 적용)**")
                                     st.text_area("B", B_txt, height=280, label_visibility="collapsed")
                                     st.download_button("B 다운로드", B_txt, file_name="result_B.txt")
                                 
@@ -1439,19 +1577,46 @@ with tab_ref:
                         with st.spinner("변환 중..."):
                             if mode == "템플릿 채움(안정적)":
                                 tpl = st.session_state.reference_template or simple_structure_guess(st.session_state.reference_text)
-                                sys, usr = build_prompt_template_fill(payload, tpl)
-                                raw = call_openai(api_key, model, sys, usr, temperature)
+                                data, rewritten = run_transform(
+                                    api_key=api_key,
+                                    model=model,
+                                    temperature=temperature,
+                                    payload=payload,
+                                    mode="template",
+                                    template=tpl,
+                                    context={
+                                        "where": "paper_step3_single",
+                                        "mode": "template",
+                                        "major": major,
+                                        "minor": minor
+                                    }
+                                )
                             else:
-                                sys, usr = build_prompt(payload)
-                                raw = call_openai(api_key, model, sys, usr, temperature)
+                                data, rewritten = run_transform(
+                                    api_key=api_key,
+                                    model=model,
+                                    temperature=temperature,
+                                    payload=payload,
+                                    mode="reference",
+                                    context={
+                                        "where": "paper_step3_single",
+                                        "mode": "reference",
+                                        "major": major,
+                                        "minor": minor
+                                    }
+                                )
 
-                        data = safe_json(raw)
-                        val = data.get("rewritten_text", None)
-                        rewritten = normalize_rewritten(val if val is not None else data)
-                        
-                        st.session_state.last_data = data
-                        st.session_state.last_rewritten = rewritten
-                        st.success("완료! 작성 탭에서 결과를 확인하세요.")
+                        st.success("완료! 아래에서 바로 결과를 확인할 수 있어요.")
+
+                        st.divider()
+                        st.markdown("#### ✅ 이번 실행 결과(바로 보기)")
+                        render_result_panel(
+                            original_text=st.session_state.last_original,
+                            rewritten=st.session_state.last_rewritten,
+                            data=st.session_state.last_data,
+                            major=major,
+                            minor=minor
+                        )
 
             st.divider()
             st.subheader("📌 현재 레퍼런스 미리보기")
@@ -1634,9 +1799,14 @@ with tab_ref:
                         )
 
                     rewritten = data.get("rewritten_text", "") or ""
+                    if hashtag_mode == "직접 입력" and custom_hashtags.strip():
+                        if custom_hashtags.strip() not in rewritten:
+                            rewritten = rewritten.rstrip() + "\n\n" + custom_hashtags.strip()
                     # 기존 파이프라인에 얹기(기능 유지)
                     st.session_state.last_data = data
                     st.session_state.last_rewritten = rewritten
+                    st.session_state.last_original = base_text
+                    st.session_state.last_run_context = {"where": "sns_generate", "mode": "sns", "major": major, "minor": minor}
 
                     st.success("생성 완료! 작성 탭의 '✅ 변환 결과'에서도 확인할 수 있어요.")
                     st.text_area("생성 결과 미리보기", rewritten, height=240)
