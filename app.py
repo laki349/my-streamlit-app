@@ -203,9 +203,24 @@ ss_init("last_original", "")
 ss_init("last_run_context", {})  # 어디서 돌렸는지(major/minor/mode) 기록용(설명/디버그)
 ss_init("last_data", {})
 ss_init("last_rewritten", "")
-ss_init("history", [])          # 최근 실행 10개 저장
+ss_init("history", []) # 최근 실행 10개 저장
+ss_init("pending_restore", None)
 ss_init("history_pick", 0)      # UI에서 선택된 항목 인덱스
+ss_init("original_text", "")
+# ============================================================
+# ✅ Restore apply (MUST run before ANY widget is created)
+# ============================================================
+if st.session_state.get("pending_restore"):
+    chosen = st.session_state.pop("pending_restore")  # 한번 쓰고 제거 (중복 방지)
 
+    # 위젯 key(original_text)는 "위젯 생성 전"에만 수정 가능
+    st.session_state["original_text"] = chosen.get("original", "")
+
+    # 결과 표시용(위젯 key 아님)
+    st.session_state["last_original"] = chosen.get("original", "")
+    st.session_state["last_rewritten"] = chosen.get("rewritten", "")
+    st.session_state["last_data"] = chosen.get("data", {}) or {}
+    st.session_state["last_run_context"] = chosen.get("context", {}) or {}
 # ============================================================
 # Helpers (diff / json)
 # ============================================================
@@ -909,7 +924,7 @@ def run_transform(
     st.session_state.last_rewritten = rewritten
     st.session_state.last_original = (payload.get("text") or "").strip()
     st.session_state.last_run_context = context or {}
-        # ✅ 히스토리 저장(최근 10개)
+    # ✅ 히스토리 저장(최근 10개)
     hist_item = {
         "ts": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "major": payload.get("major"),
@@ -1055,7 +1070,7 @@ with tab_write:
     with left:
         with st.container(border=True):
             st.subheader("🧾 원본 텍스트")
-            original_text = st.text_area("원본", height=320, key="original_text", label_visibility="collapsed")
+            typed_text = st.text_area("원본", height=320, key="original_text", label_visibility="collapsed")
             run = st.button("변환 실행")
 
             st.divider()
@@ -1086,13 +1101,8 @@ with tab_write:
                     with c1:
                         if st.button("이 결과로 복원", key="history_restore"):
                             chosen = hist[pick]
-                            st.session_state.last_original = chosen["original"]
-                            st.session_state.last_rewritten = chosen["rewritten"]
-                            st.session_state.last_data = chosen["data"]
-                            st.session_state.last_run_context = chosen.get("context", {})
-                            # 원본 입력칸도 같이 되돌리고 싶으면 아래 줄 유지
-                            st.session_state.original_text = chosen["original"]
-                            st.success("복원 완료! 아래 결과가 업데이트됐어.")
+                            st.session_state.pending_restore = chosen
+                            st.rerun()
                     with c2:
                         if st.button("히스토리 비우기", key="history_clear"):
                             st.session_state.history = []
@@ -1101,11 +1111,11 @@ with tab_write:
             if run:
                 if not api_key.strip():
                     st.error("API Key를 입력해줘.")
-                elif not original_text.strip():
+                elif not typed_text.strip():
                     st.error("원본 텍스트를 입력해줘.")
                 else:
                     payload = {
-                        "text": original_text,
+                        "text": typed_text,
                         "major": major,
                         "minor": minor,
                         "tone": tone,
@@ -1133,7 +1143,10 @@ with tab_write:
 
             data = st.session_state.last_data or {}
             rewritten = st.session_state.last_rewritten or ""
-            original_for_view = (original_text or "").strip() or (st.session_state.last_original or "").strip()
+            restored_original = (st.session_state.last_original or "").strip()
+            typed_original = (typed_text or "").strip()
+
+            original_for_view = restored_original if restored_original else typed_original
 
             if isinstance(rewritten, str) and rewritten.strip() and original_for_view.strip():
                 st.markdown("**하이라이트(변경점 표시)**")
